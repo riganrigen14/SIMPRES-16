@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Absensi Terpadu</title>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root {
+            --navy-blue: #001A4E;
+            --gold-yellow: #FFC000;
+            --light-bg: #F4F6F9;
+        }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            text-align: center; 
+            background-color: var(--light-bg);
+            margin: 0; padding: 0;
+        }
+        .header {
+            background-color: var(--navy-blue);
+            color: white;
+            padding: 20px 15px;
+            border-bottom: 5px solid var(--gold-yellow);
+            display: flex; align-items: center; justify-content: center; gap: 15px;
+        }
+        .header img { width: 55px; height: auto; }
+        .header h2 { margin: 0; font-size: 1.1rem; text-align: left; line-height: 1.4; }
+        .container { padding: 20px; max-width: 500px; margin: 0 auto; }
+        #reader { border-radius: 12px; overflow: hidden; border: 3px solid var(--navy-blue); background: white; }
+        #result { 
+            margin-top: 20px; padding: 15px; font-size: 16px; font-weight: 500; 
+            background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .status-box { padding: 10px; border-radius: 6px; margin-top: 10px; font-weight: bold; font-size: 18px;}
+        .datang { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .pulang { background-color: #cce5ff; color: #004085; border: 1px solid #b8daff; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .detail { font-size: 14px; color: #555; margin-top: 5px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <img src="logo.png" alt="Logo SMPN 16 Palu">
+        <h2>SIMPRES 16<br>SISTEM INFORMASI PRESENSI SMPN 16 PALU</h2>
+    </div>
+
+    <div class="container">
+        <div id="reader"></div>
+        <div id="result">Kamera siap.<br>Arahkan ke QR Code Siswa atau Pegawai.</div>
+    </div>
+
+    <script>
+        // --- 1. TEMPELKAN URL APPS SCRIPT DI SINI ---
+        const scriptUrl = 'https://script.google.com/macros/s/AKfycbwKC71p2N6KxPdbkP_Mn2mpJxhuKe_wd80078OPEXeiZRS5wC9NJAM5Gv80fZh1wis/exec';
+        
+        let isScanning = true;
+
+        // --- 2. SISTEM SUARA BEEP ---
+        function playAudio(type) {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            
+            if (type === 'success') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(1000, ctx.currentTime); 
+                gain.gain.setValueAtTime(1, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+                osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.2);
+            } else {
+                osc.type = 'square'; osc.frequency.setValueAtTime(300, ctx.currentTime); 
+                gain.gain.setValueAtTime(1, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+                osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
+            }
+        }
+
+        // --- 3. PEMROSESAN SCAN ---
+        function onScanSuccess(decodedText) {
+            if (!isScanning) return;
+            isScanning = false; 
+            
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = `Memproses data...`;
+
+            fetch(scriptUrl + '?id_qr=' + encodeURIComponent(decodedText))
+                .then(response => response.json())
+                .then(data => {
+                    let identitas = data.tipe === "Siswa" ? `Kelas: ${data.keterangan}` : `Jabatan: ${data.keterangan}`;
+
+                    if (data.status === "not_found") {
+                        playAudio('error');
+                        resultDiv.innerHTML = `<div class="status-box error">❌ ID Tidak Terdaftar</div><div class="detail">Kode: ${decodedText}</div>`;
+                    } 
+                    else if (data.status === "duplicate") {
+                        playAudio('error');
+                        resultDiv.innerHTML = `<div class="status-box warning">⚠️ Selesai Absen</div><div class="detail"><b>${data.nama}</b><br>Telah absen datang dan pulang hari ini.</div>`;
+                    } 
+                    else if (data.status === "datang") {
+                        playAudio('success');
+                        resultDiv.innerHTML = `<div class="status-box datang">✅ Absen Datang Berhasil</div><div class="detail"><b>${data.nama}</b><br>${identitas}<br>Waktu: ${data.waktu}</div>`;
+                    }
+                    else if (data.status === "pulang") {
+                        playAudio('success');
+                        resultDiv.innerHTML = `<div class="status-box pulang">👋 Absen Pulang Berhasil</div><div class="detail"><b>${data.nama}</b><br>${identitas}<br>Waktu: ${data.waktu}</div>`;
+                    }
+                    
+                    // Jeda sebelum scan berikutnya
+                    setTimeout(() => {
+                        resultDiv.innerHTML = "Kamera siap.<br>Arahkan ke QR Code Siswa atau Pegawai.";
+                        isScanning = true;
+                    }, 3000); 
+                })
+                .catch(error => {
+                    playAudio('error');
+                    resultDiv.innerHTML = `<div class="status-box error">Koneksi Terputus</div><div class="detail">Periksa internet dan coba lagi.</div>`;
+                    setTimeout(() => { isScanning = true; }, 3000);
+                });
+        }
+
+        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+        html5QrcodeScanner.render(onScanSuccess);
+    </script>
+
+</body>
+</html>
