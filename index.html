@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SIMPRES 16</title>
+    <title>SIMPRES 16 Sitem Informasi Presensi SMP 16 Palu</title>
     <script src="https://unpkg.com/html5-qrcode"></script>
     <style>
         :root {
@@ -27,7 +27,11 @@
         .header img { width: 55px; height: auto; }
         .header h2 { margin: 0; font-size: 1.1rem; text-align: left; line-height: 1.4; }
         .container { padding: 20px; max-width: 500px; margin: 0 auto; }
-        #reader { border-radius: 12px; overflow: hidden; border: 3px solid var(--navy-blue); background: white; }
+        
+        /* Modifikasi Reader agar tampil proporsional tanpa box pemotong */
+        #reader { border-radius: 12px; overflow: hidden; border: 3px solid var(--navy-blue); background: black; }
+        #reader video { object-fit: cover; } /* Memastikan video penuh */
+        
         #result { 
             margin-top: 20px; padding: 15px; font-size: 16px; font-weight: 500; 
             background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -44,12 +48,12 @@
 
     <div class="header">
         <img src="logo.png" alt="Logo SMPN 16 Palu">
-        <h2>SIMPRES 16<br>SISTEM INFORMASI PRESENSI SMPN 16 PALU</h2>
+        <h2>SIMPRES 16<br>Sistem Informasi Presensi SMPN 16 Palu</h2>
     </div>
 
     <div class="container">
         <div id="reader"></div>
-        <div id="result">Kamera siap.<br>Arahkan ke QR Code Siswa atau Pegawai.</div>
+        <div id="result">Kamera mode cepat (QRIS) aktif.<br>Lewatkan QR Code di depan layar.</div>
     </div>
 
     <script>
@@ -68,8 +72,8 @@
             if (type === 'success') {
                 osc.type = 'sine'; osc.frequency.setValueAtTime(1000, ctx.currentTime); 
                 gain.gain.setValueAtTime(1, ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
-                osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.2);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15); // Durasi beep dipercepat
+                osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.15);
             } else {
                 osc.type = 'square'; osc.frequency.setValueAtTime(300, ctx.currentTime); 
                 gain.gain.setValueAtTime(1, ctx.currentTime);
@@ -84,7 +88,7 @@
             isScanning = false; 
             
             const resultDiv = document.getElementById('result');
-            resultDiv.innerHTML = `Memproses data...`;
+            resultDiv.innerHTML = `Memproses data secara kilat...`;
 
             fetch(scriptUrl + '?id_qr=' + encodeURIComponent(decodedText))
                 .then(response => response.json())
@@ -108,11 +112,11 @@
                         resultDiv.innerHTML = `<div class="status-box pulang">👋 Absen Pulang Berhasil</div><div class="detail"><b>${data.nama}</b><br>${identitas}<br>Waktu: ${data.waktu}</div>`;
                     }
                     
-                    // Jeda sebelum scan berikutnya
+                    // Jeda cepat 1.5 detik (dulu 3 detik) agar antrean tidak panjang
                     setTimeout(() => {
-                        resultDiv.innerHTML = "Kamera siap.<br>Arahkan ke QR Code Siswa atau Pegawai.";
+                        resultDiv.innerHTML = "Kamera siap.<br>Lewatkan QR Code di depan layar.";
                         isScanning = true;
-                    }, 3000); 
+                    }, 1500); 
                 })
                 .catch(error => {
                     playAudio('error');
@@ -121,7 +125,18 @@
                 });
         }
 
-        const html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+        // --- 4. SUPERCHARGE SCANNER SETTINGS (ALGORITMA ALA QRIS) ---
+        const scannerConfig = {
+            fps: 30, // Ditingkatkan ke 30 Frame per detik untuk tangkapan super cepat
+            formatsToSupport: [ Html5QrcodeSupportedFormats.QR_CODE ], // CPU HP 100% didedikasikan membaca QR Code, mengabaikan barcode biasa
+            videoConstraints: {
+                facingMode: "environment", // Paksa menggunakan kamera belakang utama
+                advanced: [{ focusMode: "continuous" }] // Paksa lensa untuk selalu fokus
+            }
+            // qrbox dihapus secara sengaja agar pemindaian bersifat Full-Screen (layar penuh)
+        };
+
+        const html5QrcodeScanner = new Html5QrcodeScanner("reader", scannerConfig, false);
         html5QrcodeScanner.render(onScanSuccess);
     </script>
 
